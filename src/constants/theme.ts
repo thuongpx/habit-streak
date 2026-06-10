@@ -1,3 +1,5 @@
+import { HabitColor } from "../store/habitStore";
+
 // src/constants/theme.ts
 export const COLORS = {
   // Backgrounds
@@ -62,3 +64,60 @@ export const AD_UNITS = {
   REWARDED_ANDROID:     'ca-app-pub-3940256099942544/5224354917', // test
   REWARDED_IOS:         'ca-app-pub-3940256099942544/1712485313', // test
 } as const;
+
+
+export const ICONS = [
+  "💧",
+  "🏃",
+  "📚",
+  "🧘",
+  "😴",
+  "🥗",
+  "🎯",
+  "💪",
+  "✍️",
+  "🎵",
+  "🌿",
+  "⚡",
+  "🏋️",
+  "🚴",
+  "🧹",
+  "💊",
+  "🫀",
+  "🧠",
+  "📝",
+  "🎨",
+];
+
+export const COLORS_LIST: { key: HabitColor; main: string }[] = [
+  { key: "c3", main: COLORS.c3 },
+  { key: "c1", main: COLORS.c1 },
+  { key: "c4", main: COLORS.c4 },
+  { key: "c2", main: COLORS.c2 },
+  { key: "c5", main: COLORS.c5 },
+];
+
+export const HOURS = Array.from({ length: 24 }, (_, i) => i);
+export const MINUTES = [0, 15, 30, 45];
+
+// Bắn Interstitial Ad sau mỗi N lần tick
+export const INTERSTITIAL_EVERY = 5;
+
+// ── Accent themes ──────────────────────────────────────────────────────────────
+export const THEMES = [
+  { key: "c4", color: COLORS.c4, name: "Tím (mặc định)", locked: false },
+  { key: "c3", color: COLORS.c3, name: "Xanh teal", locked: false },
+  { key: "c1", color: COLORS.c1, name: "Đỏ san hô", locked: true },
+  { key: "c2", color: COLORS.c2, name: "Vàng cam", locked: true },
+  { key: "c5", color: COLORS.c5, name: "Vàng nắng", locked: true },
+];
+
+
+export const MESSAGES = [
+  { icon: '🌅', title: 'Bắt đầu ngày mới!',       sub: 'Tick habit đầu tiên để khởi động nhé.' },
+  { icon: '💪', title: 'Tốt lắm, tiếp tục!',       sub: 'Bạn đã làm được 1 habit rồi. Còn 4 nữa!' },
+  { icon: '🚀', title: 'Đang có đà rồi!',           sub: 'Giữa chặng rồi, đừng dừng lại!' },
+  { icon: '⚡', title: 'Gần xong rồi!',             sub: 'Chỉ còn 2 habit cuối cùng thôi!' },
+  { icon: '🔥', title: 'Sắp hoàn thành!',           sub: 'Chỉ còn 1 habit nữa, đẩy hết sức nhé!' },
+  { icon: '🎉', title: 'Hoàn hảo hôm nay!',         sub: 'Bạn đã tick đủ 5 habit. Tuyệt vời!' },
+];

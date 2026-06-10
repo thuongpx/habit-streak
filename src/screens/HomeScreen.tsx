@@ -15,10 +15,8 @@ import HabitCard             from '../components/HabitCard';
 import ProgressRing          from '../components/ProgressRing';
 import MotivationBanner      from '../components/MotivationBanner';
 import AdBanner              from '../components/AdBanner';
-import { COLORS, HABIT_COLORS, MAX_HABITS, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, HABIT_COLORS, INTERSTITIAL_EVERY, MAX_HABITS, RADIUS, SPACING } from '../constants/theme';
 
-// Bắn Interstitial Ad sau mỗi N lần tick
-const INTERSTITIAL_EVERY = 5;
 
 export default function HomeScreen() {
   const insets  = useSafeAreaInsets();

@@ -1,4 +1,3 @@
-// src/components/HabitCard.tsx
 import React, { useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Pressable,

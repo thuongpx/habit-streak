@@ -1,16 +1,7 @@
 // src/components/MotivationBanner.tsx
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../constants/theme';
-
-const MESSAGES = [
-  { icon: '🌅', title: 'Bắt đầu ngày mới!',       sub: 'Tick habit đầu tiên để khởi động nhé.' },
-  { icon: '💪', title: 'Tốt lắm, tiếp tục!',       sub: 'Bạn đã làm được 1 habit rồi. Còn 4 nữa!' },
-  { icon: '🚀', title: 'Đang có đà rồi!',           sub: 'Giữa chặng rồi, đừng dừng lại!' },
-  { icon: '⚡', title: 'Gần xong rồi!',             sub: 'Chỉ còn 2 habit cuối cùng thôi!' },
-  { icon: '🔥', title: 'Sắp hoàn thành!',           sub: 'Chỉ còn 1 habit nữa, đẩy hết sức nhé!' },
-  { icon: '🎉', title: 'Hoàn hảo hôm nay!',         sub: 'Bạn đã tick đủ 5 habit. Tuyệt vời!' },
-];
+import { COLORS, MESSAGES, RADIUS, SPACING } from '../constants/theme';
 
 interface Props {
   done:  number;
