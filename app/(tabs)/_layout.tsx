@@ -1,6 +1,7 @@
 // app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../src/constants/theme";
 
 export default function TabLayout() {
@@ -30,36 +31,54 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <TabIcon emoji="🏠" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
           title: "Stats",
-          tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "bar-chart" : "bar-chart-outline"}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="add"
         options={{
           title: "Thêm",
-          tabBarIcon: ({ color }) => <TabIcon emoji="➕" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "add-circle" : "add-circle-outline"}
+              size={26}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="setting"
         options={{
           title: "Cài đặt",
-          tabBarIcon: ({ color }) => <TabIcon emoji="⚙️" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "cog" : "cog-outline"}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>
   );
-}
-
-// Simple emoji tab icon
-function TabIcon({ emoji, color }: { emoji: string; color: string }) {
-  const { Text } = require("react-native");
-  return <Text style={{ fontSize: 22, lineHeight: 26 }}>{emoji}</Text>;
 }
