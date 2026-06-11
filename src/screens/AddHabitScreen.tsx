@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  PanResponder,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -28,7 +30,111 @@ import {
   SPACING,
 } from "../constants/theme";
 
+const ITEM_H = 44;
+const VISIBLE = 3;
+const PICKER_H = ITEM_H * VISIBLE;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DrumPicker — PanResponder + Animated, không dùng ScrollView/FlatList
+// ─────────────────────────────────────────────────────────────────────────────
+interface DrumPickerProps {
+  data: number[];
+  value: number;
+  onChange: (v: number) => void;
+}
+
+function DrumPicker({ data, value, onChange }: DrumPickerProps) {
+  const currentIdx = data.indexOf(value);
+  const baseY = -(currentIdx * ITEM_H) + ITEM_H;
+
+  // translateY và lastY dùng ref để tránh stale closure trong PanResponder
+  const translateY = useRef(new Animated.Value(baseY)).current;
+  const lastY = useRef(baseY);
+
+  // onChange ref để PanResponder luôn gọi bản mới nhất
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const snapToIdx = useCallback(
+    (idx: number, animated = true) => {
+      const clamped = Math.min(data.length - 1, Math.max(0, idx));
+      const targetY = -(clamped * ITEM_H) + ITEM_H;
+      lastY.current = targetY;
+      if (animated) {
+        Animated.spring(translateY, {
+          toValue: targetY,
+          useNativeDriver: true,
+          tension: 120,
+          friction: 10,
+        }).start();
+      } else {
+        translateY.setValue(targetY);
+      }
+      if (data[clamped] !== valueRef.current) {
+        onChangeRef.current(data[clamped]);
+        Haptics.selectionAsync();
+      }
+    },
+    [data, translateY]
+  );
+
+  // useMemo thay vì useRef — đảm bảo panResponder được tạo đúng lúc
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dy) > Math.abs(g.dx) + 2,
+        onPanResponderGrant: () => {
+          translateY.stopAnimation((current) => {
+            lastY.current = current;
+          });
+        },
+        onPanResponderMove: (_, g) => {
+          translateY.setValue(lastY.current + g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          const newY = lastY.current + g.dy;
+          const rawIdx = Math.round((ITEM_H - newY) / ITEM_H);
+          snapToIdx(rawIdx);
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snapToIdx]
+  );
+
+  return (
+    <View style={styles.drumWrap} {...panResponder.panHandlers}>
+      <View style={styles.drumHighlight} pointerEvents="none" />
+      <Animated.View style={{ transform: [{ translateY }] }}>
+        {data.map((item, idx) => (
+          <TouchableOpacity
+            key={item}
+            style={styles.drumItem}
+            onPress={() => snapToIdx(idx)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.drumText,
+                item === value && styles.drumTextActive,
+              ]}
+            >
+              {item.toString().padStart(2, "0")}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────────────────────
 export default function AddHabitScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -41,8 +147,6 @@ export default function AddHabitScreen() {
   const [minute, setMinute] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // ── Validation ────────────────────────────────────────────────────────────
-
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
       Alert.alert("Thiếu tên", "Vui lòng nhập tên cho habit nhé!");
@@ -54,10 +158,7 @@ export default function AddHabitScreen() {
     }
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // Schedule notification
     await scheduleReminder(name.trim(), hour, minute);
-
     await addHabit({
       name: name.trim(),
       icon,
@@ -65,29 +166,23 @@ export default function AddHabitScreen() {
       reminderHour: hour,
       reminderMinute: minute,
     });
-
     setSaving(false);
+    setName("")
+    setIcon("💧");
     router.back();
   }, [name, icon, color, hour, minute, habits, addHabit, router]);
-
-  // ── Notification ──────────────────────────────────────────────────────────
 
   async function scheduleReminder(habitName: string, h: number, m: number) {
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;
-
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "⚡ Đến giờ làm habit rồi!",
           body: `Đừng quên: ${habitName}`,
           sound: true,
         },
-        trigger: {
-          hour: h,
-          minute: m,
-          repeats: true,
-        } as any,
+        trigger: { hour: h, minute: m, repeats: true } as any,
       });
     } catch (e) {
       console.warn("Schedule notification failed:", e);
@@ -113,10 +208,7 @@ export default function AddHabitScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backBtn}
-            >
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
             <View>
@@ -126,12 +218,7 @@ export default function AddHabitScreen() {
           </View>
 
           {/* Preview card */}
-          <View
-            style={[
-              styles.previewCard,
-              { borderLeftWidth: 3, borderLeftColor: palette.main },
-            ]}
-          >
+          <View style={[styles.previewCard, { borderLeftWidth: 3, borderLeftColor: palette.main }]}>
             <View style={[styles.previewIcon, { backgroundColor: palette.bg }]}>
               <Text style={styles.previewIconText}>{icon}</Text>
             </View>
@@ -143,9 +230,7 @@ export default function AddHabitScreen() {
                 🔥 0 ngày streak
               </Text>
             </View>
-            <View
-              style={[styles.previewTick, { backgroundColor: palette.main }]}
-            >
+            <View style={[styles.previewTick, { backgroundColor: palette.main }]}>
               <Text style={styles.previewTickText}>○</Text>
             </View>
           </View>
@@ -173,15 +258,9 @@ export default function AddHabitScreen() {
                   key={ic}
                   style={[
                     styles.iconBtn,
-                    icon === ic && {
-                      borderColor: COLORS.c4,
-                      backgroundColor: COLORS.c4bg,
-                    },
+                    icon === ic && { borderColor: COLORS.c4, backgroundColor: COLORS.c4bg },
                   ]}
-                  onPress={() => {
-                    setIcon(ic);
-                    Haptics.selectionAsync();
-                  }}
+                  onPress={() => { setIcon(ic); Haptics.selectionAsync(); }}
                 >
                   <Text style={styles.iconBtnText}>{ic}</Text>
                 </TouchableOpacity>
@@ -201,10 +280,7 @@ export default function AddHabitScreen() {
                     { backgroundColor: c.main },
                     color === c.key && styles.colorBtnSel,
                   ]}
-                  onPress={() => {
-                    setColor(c.key);
-                    Haptics.selectionAsync();
-                  }}
+                  onPress={() => { setColor(c.key); Haptics.selectionAsync(); }}
                 />
               ))}
             </View>
@@ -214,58 +290,9 @@ export default function AddHabitScreen() {
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>GIỜ NHẮC NHỞ</Text>
             <View style={styles.timeRow}>
-              {/* Hour scroll */}
-              <ScrollView
-                style={styles.timePicker}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={40}
-                decelerationRate="fast"
-                onMomentumScrollEnd={(e) => {
-                  const idx = Math.round(e.nativeEvent.contentOffset.y / 40);
-                  setHour(Math.min(23, Math.max(0, idx)));
-                }}
-              >
-                {HOURS.map((h) => (
-                  <TouchableOpacity
-                    key={h}
-                    onPress={() => setHour(h)}
-                    style={styles.timeItem}
-                  >
-                    <Text
-                      style={[
-                        styles.timeItemText,
-                        hour === h && styles.timeItemActive,
-                      ]}
-                    >
-                      {h.toString().padStart(2, "0")}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
+              <DrumPicker data={HOURS} value={hour} onChange={setHour} />
               <Text style={styles.timeColon}>:</Text>
-
-              {/* Minute */}
-              <View style={styles.timePicker}>
-                {MINUTES.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    onPress={() => setMinute(m)}
-                    style={styles.timeItem}
-                  >
-                    <Text
-                      style={[
-                        styles.timeItemText,
-                        minute === m && styles.timeItemActive,
-                      ]}
-                    >
-                      {m.toString().padStart(2, "0")}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* AM/PM display */}
+              <DrumPicker data={MINUTES} value={minute} onChange={setMinute} />
               <View style={styles.ampmWrap}>
                 <Text style={styles.ampmText}>{ampm}</Text>
                 <Text style={styles.ampmSub}>
@@ -281,7 +308,7 @@ export default function AddHabitScreen() {
 
           <View style={{ height: 8 }} />
 
-          {/* Save button */}
+          {/* Save */}
           <TouchableOpacity
             style={[styles.saveBtn, saving && { opacity: 0.6 }]}
             onPress={handleSave}
@@ -302,8 +329,6 @@ export default function AddHabitScreen() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flex: 1 },
@@ -318,18 +343,8 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4 },
   backArrow: { fontSize: 22, color: COLORS.muted },
-  dateLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.muted,
-    letterSpacing: 0.7,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: COLORS.text,
-    letterSpacing: -0.5,
-  },
+  dateLabel: { fontSize: 11, fontWeight: "700", color: COLORS.muted, letterSpacing: 0.7 },
+  heroTitle: { fontSize: 22, fontWeight: "900", color: COLORS.text, letterSpacing: -0.5 },
 
   previewCard: {
     margin: SPACING.xl,
@@ -344,39 +359,16 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     overflow: "hidden",
   },
-  previewIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  previewIcon: { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
   previewIconText: { fontSize: 22 },
   previewInfo: { flex: 1 },
-  previewName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: COLORS.text,
-    marginBottom: 3,
-  },
+  previewName: { fontSize: 14, fontWeight: "800", color: COLORS.text, marginBottom: 3 },
   previewStreak: { fontSize: 11, fontWeight: "700" },
-  previewTick: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  previewTick: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   previewTickText: { fontSize: 16, fontWeight: "800", color: "#fff" },
 
   field: { marginHorizontal: SPACING.xl, marginBottom: SPACING.md },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.muted,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
+  fieldLabel: { fontSize: 11, fontWeight: "700", color: COLORS.muted, letterSpacing: 0.5, marginBottom: 8 },
   fieldHint: { fontSize: 11, color: COLORS.faint, marginTop: 8 },
   input: {
     width: "100%",
@@ -393,8 +385,7 @@ const styles = StyleSheet.create({
 
   iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   iconBtn: {
-    width: 42,
-    height: 42,
+    width: 42, height: 42,
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.bg3,
     borderWidth: 1.5,
@@ -405,38 +396,51 @@ const styles = StyleSheet.create({
   iconBtnText: { fontSize: 20 },
 
   colorRow: { flexDirection: "row", gap: 12 },
-  colorBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
+  colorBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: "transparent" },
   colorBtnSel: { borderColor: "#fff" },
 
   timeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.md,
+    gap: 8,
     backgroundColor: COLORS.bg3,
     borderRadius: RADIUS.md,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
+    overflow: "hidden",
   },
-  timePicker: { maxHeight: 120, flexGrow: 0 },
-  timeItem: {
-    height: 40,
+  drumWrap: {
+    flex: 1,
+    height: PICKER_H,
+    overflow: "hidden",
+  },
+  drumHighlight: {
+    position: "absolute",
+    top: ITEM_H,
+    left: 0,
+    right: 0,
+    height: ITEM_H,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+    opacity: 0.6,
+    zIndex: 1,
+  },
+  drumItem: {
+    height: ITEM_H,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 44,
   },
-  timeItemText: { fontSize: 18, fontWeight: "700", color: COLORS.faint },
-  timeItemActive: { color: COLORS.c4, fontSize: 22, fontWeight: "900" },
-  timeColon: { fontSize: 22, fontWeight: "900", color: COLORS.muted },
-  ampmWrap: { marginLeft: "auto", alignItems: "center" },
-  ampmText: { fontSize: 20, fontWeight: "900", color: COLORS.c4 },
-  ampmSub: { fontSize: 10, color: COLORS.faint, marginTop: 3 },
+  drumText: { fontSize: 20, fontWeight: "700", color: COLORS.faint },
+  drumTextActive: { fontSize: 24, fontWeight: "900", color: COLORS.c4 },
+
+  timeColon: { fontSize: 24, fontWeight: "900", color: COLORS.muted },
+  ampmWrap: { width: 56, height: PICKER_H, alignItems: "center", justifyContent: "center" },
+  ampmText: { fontSize: 22, fontWeight: "900", color: COLORS.c4 },
+  ampmSub: { fontSize: 10, color: COLORS.faint, marginTop: 4 },
 
   saveBtn: {
     marginHorizontal: SPACING.xl,

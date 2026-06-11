@@ -98,7 +98,7 @@ export default function HomeScreen() {
       );
       return;
     }
-    router.push('/add-habit');
+    router.push('/add');
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
