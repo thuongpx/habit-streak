@@ -98,7 +98,7 @@ export const COLORS_LIST: { key: HabitColor; main: string }[] = [
 ];
 
 export const HOURS = Array.from({ length: 24 }, (_, i) => i);
-export const MINUTES = [0, 15, 30, 45];
+export const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
 // Bắn Interstitial Ad sau mỗi N lần tick
 export const INTERSTITIAL_EVERY = 5;
