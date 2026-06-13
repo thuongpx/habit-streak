@@ -1,5 +1,3 @@
-import { HabitColor } from "../store/habitStore";
-
 // src/constants/theme.ts
 export const COLORS = {
   // Backgrounds
@@ -37,6 +35,52 @@ export const HABIT_COLORS = [
 
 export const MAX_HABITS = 5;
 
+// Tần suất bắn Interstitial Ad (sau mỗi N lần tick)
+export const INTERSTITIAL_EVERY = 5;
+
+// Danh sách màu để chọn khi thêm habit (dùng trong AddHabitScreen)
+export const COLORS_LIST: { key: 'c1' | 'c2' | 'c3' | 'c4' | 'c5'; main: string }[] = [
+  { key: 'c3', main: COLORS.c3 },
+  { key: 'c1', main: COLORS.c1 },
+  { key: 'c4', main: COLORS.c4 },
+  { key: 'c2', main: COLORS.c2 },
+  { key: 'c5', main: COLORS.c5 },
+];
+
+// Icon gợi ý khi thêm habit
+export const ICONS = [
+  '💧','🏃','📚','🧘','😴','🥗','🎯','💪','✍️','🎵',
+  '🌿','⚡','🏋️','🚴','🧹','💊','🫀','🧠','📝','🎨',
+];
+
+// Giờ / phút cho DrumPicker (Add Habit)
+export const HOURS   = Array.from({ length: 24 }, (_, i) => i);
+export const MINUTES = [0,5, 10, 15,20,  25, 30, 35, 40, 45, 50, 55] as const;
+
+export const HABIT_TEMPLATES: {
+  name: string;
+  icon: string;
+  color: 'c1' | 'c2' | 'c3' | 'c4' | 'c5';
+  reminderHour: number;
+  reminderMinute: number;
+}[] = [
+  { name: 'Uống 2L nước',     icon: '💧', color: 'c3', reminderHour: 9,  reminderMinute: 0 },
+  { name: 'Tập thể dục',      icon: '🏃', color: 'c1', reminderHour: 6,  reminderMinute: 30 },
+  { name: 'Đọc sách 30 phút', icon: '📚', color: 'c4', reminderHour: 21, reminderMinute: 0 },
+  { name: 'Thiền 10 phút',    icon: '🧘', color: 'c2', reminderHour: 7,  reminderMinute: 0 },
+  { name: 'Ngủ trước 23h',    icon: '😴', color: 'c5', reminderHour: 22, reminderMinute: 30 },
+  { name: 'Ăn rau xanh',      icon: '🥗', color: 'c3', reminderHour: 12, reminderMinute: 0 },
+];
+
+// Theme accent cho Settings — màu mặc định + màu mở khoá qua Rewarded Ad
+export const THEMES = [
+  { key: 'c4', color: COLORS.c4, name: 'Tím (mặc định)', locked: false },
+  { key: 'c3', color: COLORS.c3, name: 'Xanh teal',      locked: false },
+  { key: 'c1', color: COLORS.c1, name: 'Đỏ san hô',      locked: true },
+  { key: 'c2', color: COLORS.c2, name: 'Vàng cam',        locked: true },
+  { key: 'c5', color: COLORS.c5, name: 'Vàng nắng',       locked: true },
+] as const;
+
 export const SPACING = {
   xs:  4,
   sm:  8,
@@ -64,54 +108,6 @@ export const AD_UNITS = {
   REWARDED_ANDROID:     'ca-app-pub-3940256099942544/5224354917', // test
   REWARDED_IOS:         'ca-app-pub-3940256099942544/1712485313', // test
 } as const;
-
-
-export const ICONS = [
-  "💧",
-  "🏃",
-  "📚",
-  "🧘",
-  "😴",
-  "🥗",
-  "🎯",
-  "💪",
-  "✍️",
-  "🎵",
-  "🌿",
-  "⚡",
-  "🏋️",
-  "🚴",
-  "🧹",
-  "💊",
-  "🫀",
-  "🧠",
-  "📝",
-  "🎨",
-];
-
-export const COLORS_LIST: { key: HabitColor; main: string }[] = [
-  { key: "c3", main: COLORS.c3 },
-  { key: "c1", main: COLORS.c1 },
-  { key: "c4", main: COLORS.c4 },
-  { key: "c2", main: COLORS.c2 },
-  { key: "c5", main: COLORS.c5 },
-];
-
-export const HOURS = Array.from({ length: 24 }, (_, i) => i);
-export const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-
-// Bắn Interstitial Ad sau mỗi N lần tick
-export const INTERSTITIAL_EVERY = 5;
-
-// ── Accent themes ──────────────────────────────────────────────────────────────
-export const THEMES = [
-  { key: "c4", color: COLORS.c4, name: "Tím (mặc định)", locked: false },
-  { key: "c3", color: COLORS.c3, name: "Xanh teal", locked: false },
-  { key: "c1", color: COLORS.c1, name: "Đỏ san hô", locked: true },
-  { key: "c2", color: COLORS.c2, name: "Vàng cam", locked: true },
-  { key: "c5", color: COLORS.c5, name: "Vàng nắng", locked: true },
-];
-
 
 export const MESSAGES = [
   { icon: '🌅', title: 'Bắt đầu ngày mới!',       sub: 'Tick habit đầu tiên để khởi động nhé.' },

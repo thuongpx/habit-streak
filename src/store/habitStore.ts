@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, isToday, parseISO, differenceInCalendarDays } from 'date-fns';
+import * as Notifications from 'expo-notifications';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ export interface Habit {
   createdAt: string;         // ISO date string
   reminderHour:   number | null;
   reminderMinute: number | null;
+  // ID notification đã schedule cho habit này (để cancel khi edit/delete)
+  notificationId: string | null;
   // Lưu lịch sử: key = 'YYYY-MM-DD', value = true/false
   history: Record<string, boolean>;
 }
@@ -25,7 +28,8 @@ export interface HabitStore {
 
   // Actions
   loadHabits:    () => Promise<void>;
-  addHabit:      (habit: Omit<Habit, 'id' | 'createdAt' | 'history'>) => Promise<void>;
+  addHabit:      (habit: Omit<Habit, 'id' | 'createdAt' | 'history' | 'notificationId'>, notificationId?: string | null) => Promise<void>;
+  editHabit:     (id: string, updates: Partial<Omit<Habit, 'id' | 'createdAt' | 'history'>>) => Promise<void>;
   deleteHabit:   (id: string) => Promise<void>;
   toggleToday:   (id: string) => Promise<void>;
   isDoneToday:   (habit: Habit) => boolean;
@@ -98,22 +102,45 @@ export const useHabitStore = create<HabitStore>((set, get) => ({
     }
   },
 
-  addHabit: async (data) => {
+  addHabit: async (data, notificationId = null) => {
     const { habits } = get();
     if (habits.length >= 5) return; // Max 5 habit
     const newHabit: Habit = {
       ...data,
-      id:        Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      history:   {},
+      id:             Date.now().toString(),
+      createdAt:      new Date().toISOString(),
+      notificationId: notificationId ?? null,
+      history:        {},
     };
     const updated = [...habits, newHabit];
     set({ habits: updated });
     await persist(updated);
   },
 
+  editHabit: async (id, updates) => {
+    const { habits } = get();
+    const updated = habits.map(h => {
+      if (h.id !== id) return h;
+      return { ...h, ...updates };
+    });
+    set({ habits: updated });
+    await persist(updated);
+  },
+
   deleteHabit: async (id) => {
-    const updated = get().habits.filter(h => h.id !== id);
+    const { habits } = get();
+    const habit = habits.find(h => h.id === id);
+
+    // Cancel notification cũ nếu có, tránh orphaned notifications
+    if (habit?.notificationId) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(habit.notificationId);
+      } catch (e) {
+        console.warn('cancelScheduledNotificationAsync failed:', e);
+      }
+    }
+
+    const updated = habits.filter(h => h.id !== id);
     set({ habits: updated });
     await persist(updated);
   },

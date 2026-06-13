@@ -11,12 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+// TODO: Bật lại khi AdMob config plugin đã fix xong (xem SETUP_GUIDE.md)
 // import {
 //   RewardedAd,
 //   RewardedAdEventType,
 //   TestIds,
 // } from "react-native-google-mobile-ads";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import AdBanner from "../components/AdBanner";
 import {
   COLORS,
@@ -47,15 +49,27 @@ export default function SettingScreen() {
   const [loadingRewarded, setLoadingRewarded] = useState(false);
 
   // ── Rewarded Ad ────────────────────────────────────────────────────────────
-
+  // FIX #6: Bản gốc set loadingRewarded(true) nhưng toàn bộ logic AdMob bị
+  // comment, không có chỗ nào set lại về false → nút "Nhận" bị treo "..."
+  // vĩnh viễn sau lần bấm đầu tiên.
+  //
+  // Fix tạm thời: hiển thị thông báo "sắp có" và KHÔNG set loadingRewarded.
+  // Khi AdMob plugin được fix (xem SETUP_GUIDE.md), uncomment phần code cũ
+  // và xoá Alert.alert dưới đây.
   const handleWatchAd = useCallback(() => {
-    setLoadingRewarded(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    Alert.alert(
+      "🚧 Sắp ra mắt!",
+      "Tính năng mở khoá theme bằng quảng cáo sẽ sớm có trong bản cập nhật tiếp theo."
+    );
+
+    // ─── Code AdMob gốc — bật lại sau khi fix config plugin ─────────────────
+    // setLoadingRewarded(true);
     // const rewarded = RewardedAd.createForAdRequest(rewardedUnitId, {
     //   requestNonPersonalizedAdsOnly: true,
     // });
-
+    //
     // const unsubLoad = rewarded.addAdEventListener(
     //   RewardedAdEventType.LOADED,
     //   () => {
@@ -63,11 +77,10 @@ export default function SettingScreen() {
     //     rewarded.show();
     //   },
     // );
-
+    //
     // const unsubEarned = rewarded.addAdEventListener(
     //   RewardedAdEventType.EARNED_REWARD,
     //   () => {
-    //     // Mở khoá tất cả theme khi xem xong quảng cáo
     //     const all = THEMES.map((t) => t.key);
     //     setUnlockedThemes(all);
     //     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -79,11 +92,20 @@ export default function SettingScreen() {
     //     unsubEarned();
     //   },
     // );
-
-    // rewarded.addAdEventListener(RewardedAdEventType.CLOSED, () => {
+    //
+    // // FIX: luôn reset loading khi user đóng quảng cáo dù có earn reward hay không
+    // const unsubClosed = rewarded.addAdEventListener(RewardedAdEventType.CLOSED, () => {
     //   setLoadingRewarded(false);
+    //   unsubClosed();
     // });
-
+    //
+    // // FIX: nếu load lỗi (mất mạng, hết quảng cáo...), phải reset loading
+    // const unsubError = rewarded.addAdEventListener(RewardedAdEventType.ERROR, () => {
+    //   setLoadingRewarded(false);
+    //   Alert.alert("Không tải được quảng cáo", "Vui lòng thử lại sau.");
+    //   unsubError();
+    // });
+    //
     // rewarded.load();
   }, []);
 
@@ -136,13 +158,13 @@ export default function SettingScreen() {
           <Text style={styles.heroTitle}>Cài đặt</Text>
         </View>
 
-        {/* Profile card */}
+        {/* Stats summary card — thay cho profile (app không có user account) */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>AN</Text>
+          <View style={styles.summaryIcon}>
+            <Ionicons name="flame" size={22} color={COLORS.c2} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>An Nguyễn</Text>
+            <Text style={styles.profileName}>Hành trình của bạn</Text>
             <Text style={styles.profileSub}>
               {habits.length} habit đang theo dõi
             </Text>
@@ -405,15 +427,14 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 14,
   },
-  avatar: {
+  summaryIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.c4,
+    backgroundColor: COLORS.c2bg,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 16, fontWeight: "800", color: "#fff" },
   profileInfo: { flex: 1 },
   profileName: { fontSize: 14, fontWeight: "800", color: COLORS.text },
   profileSub: { fontSize: 11, color: COLORS.muted, marginTop: 2 },
@@ -430,7 +451,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  rewardedIcon: { fontSize: 26 },
+  rewardedIcon: { fontSize: 26, lineHeight: 30 },
   rewardedInfo: { flex: 1 },
   rewardedTitle: {
     fontSize: 13,
@@ -475,7 +496,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  srowIconText: { fontSize: 15 },
+  srowIconText: { fontSize: 15, lineHeight: 20 },
   srowInfo: { flex: 1 },
   srowName: { fontSize: 13, fontWeight: "700", color: COLORS.text },
   srowSub: { fontSize: 11, color: COLORS.muted, marginTop: 1 },
@@ -493,5 +514,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   themeBtnSel: { borderColor: "#fff" },
-  themeLock: { fontSize: 8 },
+  themeLock: { fontSize: 8, lineHeight: 10 },
 });
