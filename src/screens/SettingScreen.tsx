@@ -18,7 +18,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 //   TestIds,
 // } from "react-native-google-mobile-ads";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
+import { sendTestNotification, sendTestIn1Minute, listScheduledNotifications } from "../utils/notifications";
 import AdBanner from "../components/AdBanner";
 import {
   COLORS,
@@ -47,6 +49,31 @@ export default function SettingScreen() {
   const [selectedTheme, setSelectedTheme] = useState("c4");
   const [unlockedThemes, setUnlockedThemes] = useState<string[]>(["c4", "c3"]);
   const [loadingRewarded, setLoadingRewarded] = useState(false);
+  const [testingNotif, setTestingNotif] = useState(false);
+
+  // ── Test notification ───────────────────────────────────────────────────
+  const handleTestNotification = useCallback(async () => {
+    setTestingNotif(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const ok = await sendTestNotification();
+    setTestingNotif(false);
+    if (ok) {
+      Alert.alert(
+        '✅ Đã lên lịch!',
+        'Notification sẽ hiện sau 5 giây.\nNếu đang mở app thì sẽ thấy ngay, không cần thoát ra.'
+      );
+    } else {
+      // Kiểm tra lại permission status để hiện đúng lý do
+      const { status } = await Notifications.getPermissionsAsync();
+      Alert.alert(
+        '❌ Không gửi được',
+        `Permission status: "${status}"\n\n` +
+        (status === 'denied'
+          ? 'Quyền thông báo đang bị tắt. Vào: Cài đặt điện thoại → Ứng dụng → Habit Streak → Thông báo → Bật lại.'
+          : 'Thử khởi động lại app và test lại.'),
+      );
+    }
+  }, []);
 
   // ── Rewarded Ad ────────────────────────────────────────────────────────────
   // FIX #6: Bản gốc set loadingRewarded(true) nhưng toàn bộ logic AdMob bị
@@ -281,6 +308,47 @@ export default function SettingScreen() {
                 thumbColor="#fff"
               />
             }
+          />
+          <SettingsRow
+            icon="🧪"
+            iconBg="rgba(78,205,196,0.15)"
+            title={testingNotif ? "Đang gửi..." : "Test 5 giây"}
+            sub="Verify notification hoạt động"
+            right={<Text style={styles.arrow}>›</Text>}
+            onPress={testingNotif ? undefined : handleTestNotification}
+          />
+          <SettingsRow
+            icon="⏱"
+            iconBg="rgba(255,179,71,0.15)"
+            title="Test 1 phút"
+            sub="Đặt notification sau 60 giây"
+            right={<Text style={styles.arrow}>›</Text>}
+            onPress={async () => {
+              const ok = await sendTestIn1Minute();
+              if (ok) {
+                Alert.alert('⏱ Đã đặt!', 'Notification sẽ hiện sau 1 phút.\nThoát app ra background để thấy.');
+              } else {
+                Alert.alert('❌ Lỗi', 'Không schedule được. Kiểm tra permission.');
+              }
+            }}
+          />
+          <SettingsRow
+            icon="📋"
+            iconBg="rgba(167,139,250,0.15)"
+            title="Xem notifications đã đặt"
+            sub="Debug — xem console log"
+            right={<Text style={styles.arrow}>›</Text>}
+            onPress={async () => {
+              const all = await listScheduledNotifications();
+              Alert.alert(
+                `📋 Đang có ${all.length} notification`,
+                all.length === 0
+                  ? 'Chưa có notification nào được đặt.\n\nThêm habit và đặt giờ nhắc để tạo notification.'
+                  : all.map(n =>
+                      `• ${n.content.body ?? n.content.title}\n  Trigger: ${JSON.stringify(n.trigger)}`
+                    ).join('\n\n')
+              );
+            }}
             isLast
           />
         </SettingsGroup>

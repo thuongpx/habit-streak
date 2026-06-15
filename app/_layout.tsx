@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import NotificationPermissionModal from "../src/components/NotificationPermissionModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import { setupNotificationChannel } from "../src/utils/notifications";
 
 const ASKED_PERMISSION_KEY = "habit_streak_asked_notif_permission_v1";
 
@@ -16,6 +17,10 @@ export default function RootLayout() {
   useEffect(() => {
     // Khởi tạo AdMob SDK một lần duy nhất khi app start
     // MobileAds().initialize();
+    // Tạo notification channel cho Android — bắt buộc từ Android 8+,
+    // nếu thiếu thì notification bị drop âm thầm không báo lỗi
+    setupNotificationChannel();
+    
     // Kiểm tra đã hỏi permission notification chưa — chỉ hỏi 1 lần
     (async () => {
       try {
