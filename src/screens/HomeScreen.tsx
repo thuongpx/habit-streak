@@ -1,21 +1,24 @@
 // src/screens/HomeScreen.tsx
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert, RefreshControl,
+  TouchableOpacity, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter }         from 'expo-router';
+import { Ionicons }          from '@expo/vector-icons';
+import * as Haptics          from 'expo-haptics';
 import { format }            from 'date-fns';
 import { vi }                from 'date-fns/locale';
 
 import { useHabitStore }     from '../store/habitStore';
 import { useInterstitialAd } from '../hooks/useInterstitialAd';
+import { scheduleHabitReminder } from '../utils/notifications';
 import HabitCard             from '../components/HabitCard';
 import ProgressRing          from '../components/ProgressRing';
 import MotivationBanner      from '../components/MotivationBanner';
 import AdBanner              from '../components/AdBanner';
-import { COLORS, HABIT_COLORS, INTERSTITIAL_EVERY, MAX_HABITS, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, HABIT_COLORS, HABIT_TEMPLATES, INTERSTITIAL_EVERY, MAX_HABITS, RADIUS, SPACING } from '../constants/theme';
 
 
 export default function HomeScreen() {
@@ -23,7 +26,7 @@ export default function HomeScreen() {
   const router  = useRouter();
   const {
     habits, tickCount,
-    loadHabits, toggleToday, deleteHabit,
+    loadHabits, toggleToday, deleteHabit, addHabit,
     isDoneToday, getStreak, getLast7Days,
   } = useHabitStore();
   const { showIfReady } = useInterstitialAd();
@@ -33,7 +36,7 @@ export default function HomeScreen() {
     loadHabits();
   }, []);
 
-  // ── Trigger Interstitial Ad setiap 5 ticks ────────────────────────────────
+  // ── Trigger Interstitial Ad sau mỗi N ticks ───────────────────────────────
   const prevTickCount = useRef(0);
   useEffect(() => {
     if (
@@ -71,7 +74,7 @@ export default function HomeScreen() {
       habit.name,
       'Bạn muốn làm gì với habit này?',
       [
-        { text: 'Xem thống kê', onPress: () => router.push(`/stats/${id}`) },
+        { text: '✏️ Sửa habit', onPress: () => router.push(`/edit-habit/${id}`) },
         {
           text: '🗑 Xoá habit',
           style: 'destructive',
@@ -101,6 +104,40 @@ export default function HomeScreen() {
     router.push('/add');
   };
 
+  // ── Habit Templates: tap để thêm nhanh, không cần qua form ────────────────
+  const [addingTemplate, setAddingTemplate] = useState<string | null>(null);
+
+  const handleSelectTemplate = useCallback(async (
+    template: typeof HABIT_TEMPLATES[number]
+  ) => {
+    if (habits.length >= MAX_HABITS) {
+      Alert.alert(
+        '⚡ Đã đủ 5 habit!',
+        'Habit Streak giới hạn tối đa 5 habit để bạn tập trung.',
+        [{ text: 'Hiểu rồi', style: 'default' }]
+      );
+      return;
+    }
+    setAddingTemplate(template.name);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    const notificationId = await scheduleHabitReminder(
+      template.name,
+      template.reminderHour,
+      template.reminderMinute,
+    );
+
+    await addHabit({
+      name: template.name,
+      icon: template.icon,
+      color: template.color,
+      reminderHour: template.reminderHour,
+      reminderMinute: template.reminderMinute,
+    }, notificationId);
+
+    setAddingTemplate(null);
+  }, [habits, addHabit]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -127,10 +164,10 @@ export default function HomeScreen() {
             )}
           </View>
           <TouchableOpacity
-            style={styles.avatar}
+            style={styles.settingsBtn}
             onPress={() => router.push('/settings')}
           >
-            <Text style={styles.avatarText}>AN</Text>
+            <Ionicons name="cog-outline" size={20} color={COLORS.muted} />
           </TouchableOpacity>
         </View>
 
@@ -175,16 +212,42 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Empty state */}
+        {/* Empty state — hiện gợi ý habit phổ biến để tap thêm nhanh */}
         {habits.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🌱</Text>
             <Text style={styles.emptyTitle}>Chưa có habit nào</Text>
             <Text style={styles.emptySub}>
-              Thêm habit đầu tiên để bắt đầu hành trình nhé!
+              Chọn nhanh 1 gợi ý dưới đây, hoặc tạo habit riêng của bạn
             </Text>
+
+            {/* Habit templates grid */}
+            <View style={styles.templateGrid}>
+              {HABIT_TEMPLATES.map((t) => {
+                const idx = parseInt(t.color.replace('c', '')) - 1;
+                const palette = HABIT_COLORS[idx];
+                const isLoading = addingTemplate === t.name;
+                return (
+                  <TouchableOpacity
+                    key={t.name}
+                    style={[styles.templateCard, { borderColor: palette.bg }]}
+                    onPress={() => handleSelectTemplate(t)}
+                    disabled={!!addingTemplate}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.templateIcon, { backgroundColor: palette.bg }]}>
+                      <Text style={styles.templateIconText}>{t.icon}</Text>
+                    </View>
+                    <Text style={styles.templateName} numberOfLines={2}>
+                      {isLoading ? 'Đang thêm...' : t.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <TouchableOpacity style={styles.emptyBtn} onPress={handleAddHabit}>
-              <Text style={styles.emptyBtnText}>Thêm habit đầu tiên</Text>
+              <Text style={styles.emptyBtnText}>Tạo habit riêng của bạn</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -233,7 +296,6 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* ── Banner Ad: sticky, KHÔNG che tab bar ──────────────────────── */}
-      {/* AdBanner nằm đây, tab bar nằm trong layout _layout.tsx bên ngoài */}
       <AdBanner />
 
     </View>
@@ -290,22 +352,19 @@ const styles = StyleSheet.create({
     fontSize:   12,
     fontWeight: '700',
     color:      COLORS.c2l,
+    lineHeight: 17,
   },
 
-  // Avatar
-  avatar: {
+  // Settings button (thay cho avatar)
+  settingsBtn: {
     width:           38,
     height:          38,
     borderRadius:    19,
     alignItems:      'center',
     justifyContent:  'center',
-    // Gradient giả bằng border trick
-    backgroundColor: COLORS.c4,
-  },
-  avatarText: {
-    fontSize:   13,
-    fontWeight: '800',
-    color:      '#fff',
+    backgroundColor: COLORS.bg3,
+    borderWidth:     1,
+    borderColor:     COLORS.border,
   },
 
   // Progress section
@@ -332,7 +391,6 @@ const styles = StyleSheet.create({
   barFill: {
     height:          8,
     borderRadius:    4,
-    // Gradient giả bằng background color
     backgroundColor: COLORS.c4,
   },
   chips: {
@@ -358,6 +416,7 @@ const styles = StyleSheet.create({
     fontSize:   11,
     fontWeight: '600',
     color:      COLORS.muted,
+    lineHeight: 16,
   },
 
   // Section header
@@ -401,7 +460,7 @@ const styles = StyleSheet.create({
     paddingVertical:   SPACING.xxl,
     gap:               SPACING.sm,
   },
-  emptyIcon:  { fontSize: 48 },
+  emptyIcon:  { fontSize: 48, lineHeight: 56 },
   emptyTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
   emptySub:   { fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 20 },
   emptyBtn: {
@@ -415,6 +474,41 @@ const styles = StyleSheet.create({
     fontSize:   14,
     fontWeight: '800',
     color:      '#fff',
+  },
+
+  // Habit templates grid (empty state)
+  templateGrid: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    justifyContent: 'center',
+    gap:           10,
+    marginTop:     SPACING.md,
+  },
+  templateCard: {
+    width:           '30%',
+    minWidth:        90,
+    backgroundColor: COLORS.card,
+    borderRadius:    RADIUS.md,
+    borderWidth:     1.5,
+    paddingVertical:   12,
+    paddingHorizontal: 8,
+    alignItems:      'center',
+    gap:             6,
+  },
+  templateIcon: {
+    width:           36,
+    height:          36,
+    borderRadius:    RADIUS.md,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  templateIconText: { fontSize: 18, lineHeight: 22 },
+  templateName: {
+    fontSize:   11,
+    fontWeight: '700',
+    color:      COLORS.text,
+    textAlign:  'center',
+    lineHeight: 15,
   },
 
   // Slot indicator
