@@ -1,4 +1,3 @@
-// src/screens/HabitFormScreen.tsx
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -30,9 +29,6 @@ import {
   SPACING,
 } from "../constants/theme";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Notification helper — schedule mới, cancel cũ nếu có
-// ─────────────────────────────────────────────────────────────────────────────
 async function scheduleReminder(
   habitName: string,
   h: number,
@@ -40,7 +36,6 @@ async function scheduleReminder(
   oldNotificationId?: string | null
 ): Promise<string | null> {
   try {
-    // Cancel notification cũ trước (nếu đang edit)
     if (oldNotificationId) {
       try {
         await Notifications.cancelScheduledNotificationAsync(oldNotificationId);
@@ -67,18 +62,11 @@ async function scheduleReminder(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────────────────────────────────────
 interface HabitFormScreenProps {
   mode: "add" | "edit";
-  /** Habit cần sửa — chỉ truyền khi mode === 'edit' */
   habit?: Habit;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Screen
-// ─────────────────────────────────────────────────────────────────────────────
 export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -99,49 +87,54 @@ export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
       Alert.alert("Thiếu tên", "Vui lòng nhập tên cho habit nhé!");
       return;
     }
-    // Chỉ check giới hạn 5 habit khi ĐANG THÊM MỚI
     if (!isEdit && habits.length >= MAX_HABITS) {
       Alert.alert("Đã đủ 5 habit!", "Xoá habit cũ để thêm mới.");
       return;
     }
 
     setSaving(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // FIX: wrap try/finally để saving không bị kẹt true nếu có lỗi
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const notificationId = await scheduleReminder(
-      name.trim(),
-      hour,
-      minute,
-      isEdit ? habit?.notificationId : null
-    );
+      const notificationId = await scheduleReminder(
+        name.trim(),
+        hour,
+        minute,
+        isEdit ? habit?.notificationId : null
+      );
 
-    if (isEdit && habit) {
-      await editHabit(habit.id, {
-        name: name.trim(),
-        icon,
-        color,
-        reminderHour: hour,
-        reminderMinute: minute,
-        notificationId,
-      });
-    } else {
-      await addHabit(
-        {
+      if (isEdit && habit) {
+        await editHabit(habit.id, {
           name: name.trim(),
           icon,
           color,
           reminderHour: hour,
           reminderMinute: minute,
-        },
-        notificationId
-      );
+          notificationId,
+        });
+      } else {
+        await addHabit(
+          {
+            name: name.trim(),
+            icon,
+            color,
+            reminderHour: hour,
+            reminderMinute: minute,
+          },
+          notificationId
+        );
+      }
+      router.back();
+    } catch (e) {
+      console.warn("handleSave failed:", e);
+      Alert.alert("Lỗi", "Không lưu được habit, thử lại nhé!");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    router.back();
   }, [name, icon, color, hour, minute, habits, isEdit, habit, addHabit, editHabit, router]);
 
-  // ── Delete (chỉ hiện khi edit) ──────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = useCallback(() => {
     if (!habit) return;
     Alert.alert(
@@ -154,6 +147,14 @@ export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
           style: "destructive",
           onPress: async () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            // FIX: cancel notification trước khi xoá habit
+            if (habit.notificationId) {
+              try {
+                await Notifications.cancelScheduledNotificationAsync(habit.notificationId);
+              } catch (e) {
+                console.warn("Cancel notification failed:", e);
+              }
+            }
             await deleteHabit(habit.id);
             router.back();
           },
@@ -162,9 +163,9 @@ export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
     );
   }, [habit, deleteHabit, router]);
 
-  // ── Derived ──────────────────────────────────────────────────────────────
-  const colorIdx = parseInt(color.replace("c", "")) - 1;
-  const palette = HABIT_COLORS[colorIdx];
+  // ── Derived ───────────────────────────────────────────────────────────────
+  // FIX: lookup an toàn thay vì parseInt + naming convention
+  const palette = HABIT_COLORS.find((_, i) => `c${i + 1}` === color) ?? HABIT_COLORS[0];
   const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
   const ampm = hour < 12 ? "SA" : "CH";
 
@@ -190,14 +191,20 @@ export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            {/* FIX: thêm haptic cho nút back */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.back();
+              }}
+              style={styles.backBtn}
+            >
               <Text style={styles.backArrow}>←</Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={styles.dateLabel}>{headerLabel}</Text>
               <Text style={styles.heroTitle}>{headerTitle}</Text>
             </View>
-            {/* Nút xoá — chỉ hiện khi edit */}
             {isEdit && (
               <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
                 <Text style={styles.deleteBtnText}>🗑</Text>
@@ -211,7 +218,14 @@ export default function HabitFormScreen({ mode, habit }: HabitFormScreenProps) {
               <Text style={styles.previewIconText}>{icon}</Text>
             </View>
             <View style={styles.previewInfo}>
-              <Text style={styles.previewName} numberOfLines={1}>
+              {/* FIX: dùng màu faint cho placeholder để phân biệt với tên thật */}
+              <Text
+                style={[
+                  styles.previewName,
+                  !name.trim() && { color: COLORS.faint },
+                ]}
+                numberOfLines={1}
+              >
                 {name.trim() || "Tên habit của bạn"}
               </Text>
               <Text style={[styles.previewStreak, { color: palette.light }]}>

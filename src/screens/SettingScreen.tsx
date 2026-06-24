@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Linking
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 // TODO: Bật lại khi AdMob config plugin đã fix xong (xem SETUP_GUIDE.md)
@@ -37,7 +38,8 @@ import { useHabitStore } from "../store/habitStore";
 //     ? AD_UNITS.REWARDED_ANDROID
 //     : AD_UNITS.REWARDED_IOS;
 
-
+const PRIVACY_POLICY_URL = "https://thuongpx.github.io/habitstreak-policy/privacy-policy";
+const TERMS_OF_SERVICE_URL = "https://thuongpx.github.io/habitstreak-policy/terms-of-service";
 
 export default function SettingScreen() {
   const insets = useSafeAreaInsets();
@@ -169,6 +171,16 @@ export default function SettingScreen() {
       ],
     );
   }, [loadHabits]);
+
+  const handleOpenURL = useCallback(async (url: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert("Không mở được", "Vui lòng thử lại sau.");
+    }
+  }, []);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -309,48 +321,6 @@ export default function SettingScreen() {
               />
             }
           />
-          <SettingsRow
-            icon="🧪"
-            iconBg="rgba(78,205,196,0.15)"
-            title={testingNotif ? "Đang gửi..." : "Test 5 giây"}
-            sub="Verify notification hoạt động"
-            right={<Text style={styles.arrow}>›</Text>}
-            onPress={testingNotif ? undefined : handleTestNotification}
-          />
-          <SettingsRow
-            icon="⏱"
-            iconBg="rgba(255,179,71,0.15)"
-            title="Test 1 phút"
-            sub="Đặt notification sau 60 giây"
-            right={<Text style={styles.arrow}>›</Text>}
-            onPress={async () => {
-              const ok = await sendTestIn1Minute();
-              if (ok) {
-                Alert.alert('⏱ Đã đặt!', 'Notification sẽ hiện sau 1 phút.\nThoát app ra background để thấy.');
-              } else {
-                Alert.alert('❌ Lỗi', 'Không schedule được. Kiểm tra permission.');
-              }
-            }}
-          />
-          <SettingsRow
-            icon="📋"
-            iconBg="rgba(167,139,250,0.15)"
-            title="Xem notifications đã đặt"
-            sub="Debug — xem console log"
-            right={<Text style={styles.arrow}>›</Text>}
-            onPress={async () => {
-              const all = await listScheduledNotifications();
-              Alert.alert(
-                `📋 Đang có ${all.length} notification`,
-                all.length === 0
-                  ? 'Chưa có notification nào được đặt.\n\nThêm habit và đặt giờ nhắc để tạo notification.'
-                  : all.map(n =>
-                      `• ${n.content.body ?? n.content.title}\n  Trigger: ${JSON.stringify(n.trigger)}`
-                    ).join('\n\n')
-              );
-            }}
-            isLast
-          />
         </SettingsGroup>
 
         {/* ── Dữ liệu ────────────────────────────────────────────────────── */}
@@ -383,6 +353,22 @@ export default function SettingScreen() {
             title="Đánh giá app"
             sub="Giúp mình lên store nha!"
             right={<Text style={styles.arrow}>›</Text>}
+          />
+          <SettingsRow
+            icon="🔒"
+            iconBg="rgba(78,205,196,0.15)"
+            title="Chính sách bảo mật"
+            sub="Cách app xử lý dữ liệu của bạn"
+            right={<Text style={styles.arrow}>›</Text>}
+            onPress={() => handleOpenURL(PRIVACY_POLICY_URL)}
+          />
+          <SettingsRow
+            icon="📄"
+            iconBg="rgba(167,139,250,0.15)"
+            title="Điều khoản sử dụng"
+            sub="Quy định khi dùng app"
+            right={<Text style={styles.arrow}>›</Text>}
+            onPress={() => handleOpenURL(TERMS_OF_SERVICE_URL)}
           />
           <SettingsRow
             icon="📋"
