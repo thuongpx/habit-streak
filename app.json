@@ -11,7 +11,10 @@
     "ios": {
       "newArchEnabled": false,
       "supportsTablet": true,
-      "bundleIdentifier": "com.thuogpx.habitstreak" 
+      "bundleIdentifier": "com.thuogpx.habitstreak",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "newArchEnabled": true,
@@ -21,11 +24,20 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
-    ]
-  },
-  "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-3940256099942544~3347511713",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+      "expo-router",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9280277943761953/5710617512",
+          "iosAppId": "ca-app-pub-9280277943761953/2688034204"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d758b55b-0447-4223-9f7a-6d4bdb1c51ca"
+      }
+    }
   }
 }

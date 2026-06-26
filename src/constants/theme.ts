@@ -101,8 +101,8 @@ export const RADIUS = {
 // TODO: Thay bằng ID thật trước khi submit store
 export const AD_UNITS = {
   // Dùng Test IDs khi dev, Real IDs khi release
-  BANNER_ANDROID:       'ca-app-pub-3940256099942544/6300978111', // test
-  BANNER_IOS:           'ca-app-pub-3940256099942544/2934735716', // test
+  BANNER_ANDROID:       'ca-app-pub-9280277943761953/5710617512', // ID thật
+  BANNER_IOS:           'ca-app-pub-9280277943761953/2688034204', // ID thật
   INTERSTITIAL_ANDROID: 'ca-app-pub-3940256099942544/1033173712', // test
   INTERSTITIAL_IOS:     'ca-app-pub-3940256099942544/4411468910', // test
   REWARDED_ANDROID:     'ca-app-pub-3940256099942544/5224354917', // test
