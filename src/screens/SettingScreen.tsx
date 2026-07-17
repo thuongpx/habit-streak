@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useState } from "react";
+import Constants from "expo-constants";
+import * as StoreReview from "expo-store-review";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -9,7 +11,7 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Linking
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 // TODO: Bật lại khi AdMob config plugin đã fix xong (xem SETUP_GUIDE.md)
@@ -21,15 +23,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
-import { sendTestNotification, sendTestIn1Minute, listScheduledNotifications } from "../utils/notifications";
+import { scheduleHabitReminder } from "../utils/notifications";
 import AdBanner from "../components/AdBanner";
 import {
   COLORS,
   RADIUS,
   SPACING,
-  THEMES
+  THEMES,
 } from "../constants/theme";
 import { useHabitStore } from "../store/habitStore";
+
+const NOTIF_ENABLED_KEY = "habit_streak_notif_enabled_v1";
+const STORAGE_KEY = "habit_streak_data_v1";
 
 // ── Rewarded Ad setup ─────────────────────────────────────────────────────────
 // const rewardedUnitId = __DEV__
@@ -40,109 +45,92 @@ import { useHabitStore } from "../store/habitStore";
 
 const PRIVACY_POLICY_URL = "https://thuongpx.github.io/habitstreak-policy/privacy-policy";
 const TERMS_OF_SERVICE_URL = "https://thuongpx.github.io/habitstreak-policy/terms-of-service";
+// TODO: điền App Store ID thật sau khi app được duyệt lần đầu trên App Store Connect
+const APP_STORE_ID = "";
+
+// FIX: tạm thời mở khoá hết theme vì rewarded ads chưa hoạt động —
+// tránh để tính năng "cụt" (khoá vĩnh viễn không cách nào mở) khi submit
+const ALL_THEME_KEYS = THEMES.map((t) => t.key);
 
 export default function SettingScreen() {
   const insets = useSafeAreaInsets();
-  const { habits, loadHabits } = useHabitStore();
+  const { habits, loadHabits, editHabit } = useHabitStore();
 
   const [dailyReminder, setDailyReminder] = useState(true);
-  const [eveningReminder, setEveningReminder] = useState(false);
-  const [milestoneAlert, setMilestoneAlert] = useState(true);
+  const [reminderLoading, setReminderLoading] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState("c4");
-  const [unlockedThemes, setUnlockedThemes] = useState<string[]>(["c4", "c3"]);
-  const [loadingRewarded, setLoadingRewarded] = useState(false);
-  const [testingNotif, setTestingNotif] = useState(false);
+  const [unlockedThemes] = useState<string[]>(ALL_THEME_KEYS); // FIX: mở hết tạm thời
 
-  // ── Test notification ───────────────────────────────────────────────────
-  const handleTestNotification = useCallback(async () => {
-    setTestingNotif(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const ok = await sendTestNotification();
-    setTestingNotif(false);
-    if (ok) {
-      Alert.alert(
-        '✅ Đã lên lịch!',
-        'Notification sẽ hiện sau 5 giây.\nNếu đang mở app thì sẽ thấy ngay, không cần thoát ra.'
-      );
-    } else {
-      // Kiểm tra lại permission status để hiện đúng lý do
-      const { status } = await Notifications.getPermissionsAsync();
-      Alert.alert(
-        '❌ Không gửi được',
-        `Permission status: "${status}"\n\n` +
-        (status === 'denied'
-          ? 'Quyền thông báo đang bị tắt. Vào: Cài đặt điện thoại → Ứng dụng → Habit Streak → Thông báo → Bật lại.'
-          : 'Thử khởi động lại app và test lại.'),
-      );
-    }
+  // ── Load trạng thái bật/tắt notification đã lưu ─────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(NOTIF_ENABLED_KEY);
+        // Mặc định true nếu chưa từng lưu (user mới)
+        setDailyReminder(raw === null ? true : raw === "1");
+      } catch (e) {
+        console.warn("Load notif setting failed:", e);
+      }
+    })();
   }, []);
 
-  // ── Rewarded Ad ────────────────────────────────────────────────────────────
-  // FIX #6: Bản gốc set loadingRewarded(true) nhưng toàn bộ logic AdMob bị
-  // comment, không có chỗ nào set lại về false → nút "Nhận" bị treo "..."
-  // vĩnh viễn sau lần bấm đầu tiên.
-  //
-  // Fix tạm thời: hiển thị thông báo "sắp có" và KHÔNG set loadingRewarded.
-  // Khi AdMob plugin được fix (xem SETUP_GUIDE.md), uncomment phần code cũ
-  // và xoá Alert.alert dưới đây.
+  // ── Toggle nhắc nhở hằng ngày — wiring thật với cancel/reschedule ───────
+  const handleToggleDailyReminder = useCallback(
+    async (next: boolean) => {
+      setReminderLoading(true);
+      Haptics.selectionAsync();
+      try {
+        if (!next) {
+          // TẮT: cancel toàn bộ notification đang schedule, xoá notificationId khỏi từng habit
+          for (const h of habits) {
+            if (h.notificationId) {
+              try {
+                await Notifications.cancelScheduledNotificationAsync(h.notificationId);
+              } catch (e) {
+                console.warn("Cancel notification failed:", e);
+              }
+              await editHabit(h.id, { notificationId: null });
+            }
+          }
+        } else {
+          // BẬT LẠI: re-schedule dựa theo giờ đã lưu sẵn cho từng habit
+          for (const h of habits) {
+            if (h.reminderHour == null || h.reminderMinute == null) continue;
+            const id = await scheduleHabitReminder(
+              h.name,
+              h.reminderHour,
+              h.reminderMinute,
+              h.notificationId
+            );
+            await editHabit(h.id, { notificationId: id });
+          }
+        }
+        await AsyncStorage.setItem(NOTIF_ENABLED_KEY, next ? "1" : "0");
+        setDailyReminder(next);
+      } catch (e) {
+        console.warn("Toggle daily reminder failed:", e);
+        Alert.alert("Lỗi", "Không thể cập nhật cài đặt thông báo, thử lại nhé!");
+      } finally {
+        setReminderLoading(false);
+      }
+    },
+    [habits, editHabit]
+  );
+
+  // ── Rewarded Ad (tạm khoá, chưa có SDK thật) ────────────────────────────
   const handleWatchAd = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     Alert.alert(
       "🚧 Sắp ra mắt!",
       "Tính năng mở khoá theme bằng quảng cáo sẽ sớm có trong bản cập nhật tiếp theo."
     );
-
-    // ─── Code AdMob gốc — bật lại sau khi fix config plugin ─────────────────
-    // setLoadingRewarded(true);
-    // const rewarded = RewardedAd.createForAdRequest(rewardedUnitId, {
-    //   requestNonPersonalizedAdsOnly: true,
-    // });
-    //
-    // const unsubLoad = rewarded.addAdEventListener(
-    //   RewardedAdEventType.LOADED,
-    //   () => {
-    //     setLoadingRewarded(false);
-    //     rewarded.show();
-    //   },
-    // );
-    //
-    // const unsubEarned = rewarded.addAdEventListener(
-    //   RewardedAdEventType.EARNED_REWARD,
-    //   () => {
-    //     const all = THEMES.map((t) => t.key);
-    //     setUnlockedThemes(all);
-    //     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    //     Alert.alert(
-    //       "🎉 Mở khoá thành công!",
-    //       "Tất cả theme đã được mở khoá. Cảm ơn bạn đã xem quảng cáo!",
-    //     );
-    //     unsubLoad();
-    //     unsubEarned();
-    //   },
-    // );
-    //
-    // // FIX: luôn reset loading khi user đóng quảng cáo dù có earn reward hay không
-    // const unsubClosed = rewarded.addAdEventListener(RewardedAdEventType.CLOSED, () => {
-    //   setLoadingRewarded(false);
-    //   unsubClosed();
-    // });
-    //
-    // // FIX: nếu load lỗi (mất mạng, hết quảng cáo...), phải reset loading
-    // const unsubError = rewarded.addAdEventListener(RewardedAdEventType.ERROR, () => {
-    //   setLoadingRewarded(false);
-    //   Alert.alert("Không tải được quảng cáo", "Vui lòng thử lại sau.");
-    //   unsubError();
-    // });
-    //
-    // rewarded.load();
   }, []);
 
   // ── Backup / Restore ───────────────────────────────────────────────────────
 
   const handleBackup = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem("habit_streak_data_v1");
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (!raw) {
         Alert.alert("Không có dữ liệu", "Chưa có habit nào để backup.");
         return;
@@ -163,14 +151,25 @@ export default function SettingScreen() {
           text: "Xoá hết",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.removeItem("habit_streak_data_v1");
+            // FIX: cancel toàn bộ notification trước khi xoá data,
+            // tránh user vẫn nhận nhắc nhở cho habit đã không còn tồn tại
+            for (const h of habits) {
+              if (h.notificationId) {
+                try {
+                  await Notifications.cancelScheduledNotificationAsync(h.notificationId);
+                } catch (e) {
+                  console.warn("Cancel notification failed:", e);
+                }
+              }
+            }
+            await AsyncStorage.removeItem(STORAGE_KEY);
             await loadHabits();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
-      ],
+      ]
     );
-  }, [loadHabits]);
+  }, [habits, loadHabits]);
 
   const handleOpenURL = useCallback(async (url: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -179,6 +178,23 @@ export default function SettingScreen() {
       await Linking.openURL(url);
     } else {
       Alert.alert("Không mở được", "Vui lòng thử lại sau.");
+    }
+  }, []);
+
+  const handleRateApp = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const available = await StoreReview.isAvailableAsync();
+      if (available) {
+        await StoreReview.requestReview();
+        return;
+      }
+    } catch (e) {
+      console.warn("StoreReview failed:", e);
+    }
+    // Fallback: mở thẳng trang App Store nếu có ID
+    if (APP_STORE_ID) {
+      Linking.openURL(`https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`);
     }
   }, []);
 
@@ -197,7 +213,7 @@ export default function SettingScreen() {
           <Text style={styles.heroTitle}>Cài đặt</Text>
         </View>
 
-        {/* Stats summary card — thay cho profile (app không có user account) */}
+        {/* Stats summary card */}
         <View style={styles.profileCard}>
           <View style={styles.summaryIcon}>
             <Ionicons name="flame" size={22} color={COLORS.c2} />
@@ -210,25 +226,17 @@ export default function SettingScreen() {
           </View>
         </View>
 
-        {/* ── REWARDED AD — Mở theme ─────────────────────────────────────── */}
+        {/* ── REWARDED AD — Mở theme (tạm ẩn CTA thật, chỉ hiện "sắp ra mắt") */}
         <TouchableOpacity
           style={styles.rewardedBtn}
           onPress={handleWatchAd}
-          disabled={loadingRewarded}
           activeOpacity={0.85}
         >
           <Text style={styles.rewardedIcon}>🎨</Text>
           <View style={styles.rewardedInfo}>
-            <Text style={styles.rewardedTitle}>Mở khoá theme Premium</Text>
+            <Text style={styles.rewardedTitle}>Theme Premium</Text>
             <Text style={styles.rewardedSub}>
-              {loadingRewarded
-                ? "Đang tải quảng cáo..."
-                : "Xem 1 quảng cáo ngắn để nhận miễn phí"}
-            </Text>
-          </View>
-          <View style={styles.rewardedCta}>
-            <Text style={styles.rewardedCtaText}>
-              {loadingRewarded ? "..." : "Nhận"}
+              Tất cả theme hiện đang miễn phí 🎉
             </Text>
           </View>
         </TouchableOpacity>
@@ -237,10 +245,7 @@ export default function SettingScreen() {
         <SettingsGroup title="Giao diện">
           <View style={[styles.srow, { paddingVertical: 14 }]}>
             <View
-              style={[
-                styles.srowIcon,
-                { backgroundColor: "rgba(78,205,196,0.15)" },
-              ]}
+              style={[styles.srowIcon, { backgroundColor: "rgba(78,205,196,0.15)" }]}
             >
               <Text style={styles.srowIconText}>🌙</Text>
             </View>
@@ -250,16 +255,11 @@ export default function SettingScreen() {
             </View>
             <View style={styles.themeRow}>
               {THEMES.map((t) => {
-                const isLocked = !unlockedThemes.includes(t.key);
                 const isSelected = selectedTheme === t.key;
                 return (
                   <TouchableOpacity
                     key={t.key}
                     onPress={() => {
-                      if (isLocked) {
-                        handleWatchAd();
-                        return;
-                      }
                       setSelectedTheme(t.key);
                       Haptics.selectionAsync();
                     }}
@@ -268,9 +268,7 @@ export default function SettingScreen() {
                       { backgroundColor: t.color },
                       isSelected && styles.themeBtnSel,
                     ]}
-                  >
-                    {isLocked && <Text style={styles.themeLock}>🔒</Text>}
-                  </TouchableOpacity>
+                  />
                 );
               })}
             </View>
@@ -283,11 +281,12 @@ export default function SettingScreen() {
             icon="🔔"
             iconBg="rgba(255,179,71,0.15)"
             title="Nhắc nhở hằng ngày"
-            sub="7:00 sáng mỗi ngày"
+            sub="Theo giờ đã đặt cho từng habit"
             right={
               <Switch
                 value={dailyReminder}
-                onValueChange={setDailyReminder}
+                onValueChange={handleToggleDailyReminder}
+                disabled={reminderLoading}
                 trackColor={{ true: COLORS.c3 }}
                 thumbColor="#fff"
               />
@@ -297,29 +296,18 @@ export default function SettingScreen() {
             icon="⏰"
             iconBg="rgba(249,202,36,0.15)"
             title="Nhắc cuối ngày"
-            sub="21:00 nếu chưa tick đủ"
-            right={
-              <Switch
-                value={eveningReminder}
-                onValueChange={setEveningReminder}
-                trackColor={{ true: COLORS.c3 }}
-                thumbColor="#fff"
-              />
-            }
+            sub="Sắp ra mắt"
+            titleStyle={{ color: COLORS.faint }}
+            right={<Switch value={false} disabled trackColor={{ true: COLORS.c3 }} thumbColor="#fff" />}
           />
           <SettingsRow
             icon="🏆"
             iconBg="rgba(255,107,107,0.15)"
             title="Milestone"
-            sub="Khi đạt streak 7, 14, 30 ngày"
-            right={
-              <Switch
-                value={milestoneAlert}
-                onValueChange={setMilestoneAlert}
-                trackColor={{ true: COLORS.c3 }}
-                thumbColor="#fff"
-              />
-            }
+            sub="Sắp ra mắt"
+            titleStyle={{ color: COLORS.faint }}
+            right={<Switch value={false} disabled trackColor={{ true: COLORS.c3 }} thumbColor="#fff" />}
+            isLast
           />
         </SettingsGroup>
 
@@ -353,6 +341,7 @@ export default function SettingScreen() {
             title="Đánh giá app"
             sub="Giúp mình lên store nha!"
             right={<Text style={styles.arrow}>›</Text>}
+            onPress={handleRateApp}
           />
           <SettingsRow
             icon="🔒"
@@ -375,7 +364,11 @@ export default function SettingScreen() {
             iconBg="rgba(78,205,196,0.15)"
             title="Phiên bản"
             sub="Habit Streak"
-            right={<Text style={[styles.arrow, { fontSize: 11 }]}>v1.0.0</Text>}
+            right={
+              <Text style={[styles.arrow, { fontSize: 11 }]}>
+                v{Constants.expoConfig?.version ?? "1.0.0"}
+              </Text>
+            }
             isLast
           />
         </SettingsGroup>
@@ -514,13 +507,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rewardedSub: { fontSize: 11, color: COLORS.muted },
-  rewardedCta: {
-    backgroundColor: COLORS.c4,
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-  },
-  rewardedCtaText: { fontSize: 11, fontWeight: "800", color: "#fff" },
 
   group: { marginHorizontal: SPACING.xl, marginBottom: SPACING.md },
   groupTitle: {
@@ -564,9 +550,6 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     borderWidth: 2,
     borderColor: "transparent",
-    alignItems: "center",
-    justifyContent: "center",
   },
   themeBtnSel: { borderColor: "#fff" },
-  themeLock: { fontSize: 8, lineHeight: 10 },
 });

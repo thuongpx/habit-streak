@@ -15,6 +15,7 @@ Notifications.setNotificationHandler({
 
 /**
  * Tạo notification channel cho Android — BẮT BUỘC từ Android 8.0+.
+ * No-op an toàn trên iOS.
  */
 export async function setupNotificationChannel() {
   if (Platform.OS !== 'android') return;
@@ -24,24 +25,6 @@ export async function setupNotificationChannel() {
     vibrationPattern: [0, 250, 250, 250],
     sound: 'default',
   });
-}
-
-/**
- * Tính số giây từ bây giờ đến lần HH:MM tiếp theo.
- * Ví dụ: bây giờ 14:35, target 07:00 → trả về giây đến 07:00 ngày mai.
- *         bây giờ 06:00, target 07:00 → trả về giây đến 07:00 hôm nay.
- */
-function secondsUntilNextTime(hour: number, minute: number): number {
-  const now = new Date();
-  const target = new Date();
-  target.setHours(hour, minute, 0, 0);
-
-  // Nếu giờ target đã qua hôm nay, chuyển sang ngày mai
-  if (target.getTime() <= now.getTime()) {
-    target.setDate(target.getDate() + 1);
-  }
-
-  return Math.round((target.getTime() - now.getTime()) / 1000);
 }
 
 /**
@@ -104,17 +87,10 @@ export async function sendTestIn1Minute(): Promise<boolean> {
 /**
  * Schedule daily reminder cho 1 habit.
  *
- * CHIẾN LƯỢC: Dùng TIME_INTERVAL thay vì CALENDAR/DAILY vì:
- * - CALENDAR trigger không hoạt động đúng trên Expo Go iOS
- * - TIME_INTERVAL hoạt động nhất quán trên cả Expo Go lẫn production
- *
- * Cách hoạt động:
- * 1. Tính số giây đến lần HH:MM tiếp theo
- * 2. Schedule notification với TIME_INTERVAL đó, repeats: true (lặp mỗi 24h)
- *
- * Giới hạn: repeats với TIME_INTERVAL sẽ lặp mỗi N giây (không nhất thiết
- * đúng 24h vì drift), nhưng đủ chính xác cho habit reminder (sai vài giây).
- * Production build nên dùng CALENDAR/DAILY cho chính xác hơn.
+ * Dùng CALENDAR trigger — hoạt động đúng trên iOS (lặp lại chính xác
+ * mỗi ngày đúng giờ, không bị lệch dần như TIME_INTERVAL + repeats).
+ * LƯU Ý: CALENDAR trigger CHỈ hỗ trợ iOS — khi làm Android cần đổi
+ * sang SchedulableTriggerInputTypes.DAILY (hỗ trợ cả 2 platform).
  */
 export async function scheduleHabitReminder(
   habitName: string,
@@ -137,14 +113,6 @@ export async function scheduleHabitReminder(
       return null;
     }
 
-    const secondsUntil = secondsUntilNextTime(hour, minute);
-    const secondsIn24h = 24 * 60 * 60;
-
-    console.log(
-      `[Notif] Scheduling "${habitName}" at ${hour}:${String(minute).padStart(2,'0')}`,
-      `→ fires in ${Math.round(secondsUntil / 60)} minutes`
-    );
-
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: '⚡ Đến giờ làm habit rồi!',
@@ -152,18 +120,18 @@ export async function scheduleHabitReminder(
         sound: true,
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        // Lần đầu fire sau N giây (đến giờ target hôm nay hoặc ngày mai)
-        // Sau đó lặp lại mỗi 24h
-        seconds: secondsUntil,
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour,
+        minute,
         repeats: true,
         ...(Platform.OS === 'android' && { channelId: 'habit-reminders' }),
       } as any,
     });
 
-    // Verify đã schedule
-    const all = await Notifications.getAllScheduledNotificationsAsync();
-    console.log(`[Notif] Scheduled ID: ${id} | Total: ${all.length}`);
+    if (__DEV__) {
+      const all = await Notifications.getAllScheduledNotificationsAsync();
+      console.log(`[Notif] Scheduled ID: ${id} | Total: ${all.length}`);
+    }
 
     return id;
   } catch (e) {
@@ -177,6 +145,6 @@ export async function scheduleHabitReminder(
  */
 export async function listScheduledNotifications() {
   const all = await Notifications.getAllScheduledNotificationsAsync();
-  console.log('[Notif] All scheduled:', JSON.stringify(all, null, 2));
+  if (__DEV__) console.log('[Notif] All scheduled:', JSON.stringify(all, null, 2));
   return all;
 }

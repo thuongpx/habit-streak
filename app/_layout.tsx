@@ -9,25 +9,23 @@ import NotificationPermissionModal from "../src/components/NotificationPermissio
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { setupNotificationChannel } from "../src/utils/notifications";
+import mobileAds, { MaxAdContentRating } from "react-native-google-mobile-ads";
 
 const ASKED_PERMISSION_KEY = "habit_streak_asked_notif_permission_v1";
 
 export default function RootLayout() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+
   useEffect(() => {
-    // Khởi tạo AdMob SDK một lần duy nhất khi app start
-    // MobileAds().initialize();
-    // Tạo notification channel cho Android — bắt buộc từ Android 8+,
-    // nếu thiếu thì notification bị drop âm thầm không báo lỗi
+    // Tạo notification channel cho Android — no-op an toàn trên iOS
+    // nếu setupNotificationChannel() đã tự check Platform.OS
     setupNotificationChannel();
-    
-    // Kiểm tra đã hỏi permission notification chưa — chỉ hỏi 1 lần
+
     (async () => {
       try {
         const asked = await AsyncStorage.getItem(ASKED_PERMISSION_KEY);
         if (asked) return;
 
-        // Nếu đã có quyền từ trước (vd: cài lại app), không cần hỏi
         const { status } = await Notifications.getPermissionsAsync();
         if (status === "granted") {
           await AsyncStorage.setItem(ASKED_PERMISSION_KEY, "1");
@@ -41,8 +39,24 @@ export default function RootLayout() {
     })();
   }, []);
 
+  useEffect(() => {
+    mobileAds()
+      .setRequestConfiguration({
+        maxAdContentRating: MaxAdContentRating.PG,
+        tagForChildDirectedTreatment: false,
+        tagForUnderAgeOfConsent: false,
+      })
+      .then(() => mobileAds().initialize())
+      .then((adapterStatuses) => {
+        if (__DEV__) console.log("[Ad] SDK initialized:", adapterStatuses);
+      })
+      .catch((err) => {
+        if (__DEV__) console.warn("[Ad] SDK init failed:", err);
+      });
+  }, []);
+
   const markAsked = async () => {
-    await AsyncStorage.setItem(ASKED_PERMISSION_KEY, '1');
+    await AsyncStorage.setItem(ASKED_PERMISSION_KEY, "1");
     setShowPermissionModal(false);
   };
 
@@ -50,7 +64,7 @@ export default function RootLayout() {
     try {
       await Notifications.requestPermissionsAsync();
     } catch (e) {
-      console.warn('requestPermissionsAsync failed:', e);
+      console.warn("requestPermissionsAsync failed:", e);
     }
     await markAsked();
   };
@@ -65,10 +79,7 @@ export default function RootLayout() {
         <StatusBar style="light" backgroundColor="#0F0F1A" />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="edit-habit/[id]"
-            options={{ presentation: "modal" }}
-          />
+          <Stack.Screen name="edit-habit/[id]" options={{ presentation: "modal" }} />
           <Stack.Screen name="add-habit" options={{ presentation: "modal" }} />
           <Stack.Screen name="stats/[id]" options={{ presentation: "card" }} />
         </Stack>

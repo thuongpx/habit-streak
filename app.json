@@ -9,16 +9,16 @@
       "**/*"
     ],
     "ios": {
-      "newArchEnabled": false,
+      "newArchEnabled": true,
       "supportsTablet": true,
-      "bundleIdentifier": "com.thuogpx.habitstreak",
+      "bundleIdentifier": "com.thuongpx.habitstreak",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "newArchEnabled": true,
-      "package": "com.thuogpx.habitstreak"
+      "package": "com.thuongpx.habitstreak"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -28,8 +28,8 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-9280277943761953/5710617512",
-          "iosAppId": "ca-app-pub-9280277943761953/2688034204"
+          "androidAppId": "ca-app-pub-8329232441860385~7031211737",
+          "iosAppId": "ca-app-pub-8329232441860385~2162028434"
         }
       ]
     ],

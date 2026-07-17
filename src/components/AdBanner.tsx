@@ -1,19 +1,11 @@
 // src/components/AdBanner.tsx
 import React, { useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import {
-  BannerAd,
-  BannerAdSize,
-} from 'react-native-google-mobile-ads';
-import { COLORS, AD_UNITS } from '../constants/theme';
-import { TestIds } from '../constants/ads';
+import { View, StyleSheet } from 'react-native';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import { COLORS } from '../constants/theme';
+import { getAdUnitId } from '../constants/ads';
 
-const adUnitId = __DEV__
-  ? TestIds.ADAPTIVE_BANNER
-  : Platform.select({
-      android: AD_UNITS.BANNER_ANDROID,
-      ios: AD_UNITS.BANNER_IOS,
-    })!;
+const adUnitId = getAdUnitId('BANNER');
 
 /**
  * AdBanner — dán cứng phía dưới màn hình
@@ -22,21 +14,19 @@ const adUnitId = __DEV__
  */
 export default function AdBanner() {
   const [adLoaded, setAdLoaded] = useState(false);
+
   return (
-    // Ẩn View khi chưa load xong → không chiếm không gian
     <View style={[styles.container, !adLoaded && styles.hidden]}>
       <BannerAd
         unitId={adUnitId}
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
         requestOptions={{
-          requestNonPersonalizedAdsOnly: true,
+          requestNonPersonalizedAdsOnly: true, // Phương án A
         }}
-        onAdLoaded={() => {
-          setAdLoaded(true);
-        }}
+        onAdLoaded={() => setAdLoaded(true)}
         onAdFailedToLoad={(err) => {
           setAdLoaded(false);
-          if (__DEV__) console.log('Banner ad failed:', err);
+          if (__DEV__) console.log('[Ad] Banner failed:', err);
         }}
       />
     </View>

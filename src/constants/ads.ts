@@ -24,7 +24,7 @@ export const TestIds = {
 export const AD_UNITS = {
   BANNER: Platform.select({
     android: 'ca-app-pub-xxx/yyy',       // thay ID thật Android
-    ios: 'ca-app-pub-9280277943761953/2688034204',
+    ios: 'ca-app-pub-8329232441860385/4206385612',
   })!,
   INTERSTITIAL: Platform.select({
     android: 'ca-app-pub-xxx/zzz',

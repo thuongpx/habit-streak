@@ -102,11 +102,11 @@ export const RADIUS = {
 export const AD_UNITS = {
   // Dùng Test IDs khi dev, Real IDs khi release
   BANNER_ANDROID:       'ca-app-pub-9280277943761953/5710617512', // ID thật
-  BANNER_IOS:           'ca-app-pub-9280277943761953/2688034204', // ID thật
-  INTERSTITIAL_ANDROID: 'ca-app-pub-3940256099942544/1033173712', // test
-  INTERSTITIAL_IOS:     'ca-app-pub-3940256099942544/4411468910', // test
-  REWARDED_ANDROID:     'ca-app-pub-3940256099942544/5224354917', // test
-  REWARDED_IOS:         'ca-app-pub-3940256099942544/1712485313', // test
+  BANNER_IOS:           'ca-app-pub-8329232441860385/4206385612', // ID thật
+  // INTERSTITIAL_ANDROID: 'ca-app-pub-3940256099942544/1033173712', // test
+  // INTERSTITIAL_IOS:     'ca-app-pub-3940256099942544/4411468910', // test
+  // REWARDED_ANDROID:     'ca-app-pub-3940256099942544/5224354917', // test
+  // REWARDED_IOS:         'ca-app-pub-3940256099942544/1712485313', // test
 } as const;
 
 export const MESSAGES = [
